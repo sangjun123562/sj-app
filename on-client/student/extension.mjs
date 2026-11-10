@@ -187,15 +187,10 @@ export function createStudentView() {
       return container;
     },
 
-    /**
-     * 15단계: 최근 보안 기록 필터링 및 기록별 근거·규칙·상태 상세 표시
-     * 수정 대상: renderEvents
-     */
     renderEvents({ status, mode, data, error }) {
       const container = document.createElement('div');
       container.className = 'student-events-container';
 
-      // 모드 안내 배지
       const modeMap = {
         demo: '예제 자료',
         disconnected: '연결 없음',
@@ -208,7 +203,6 @@ export function createStudentView() {
         container.appendChild(modeBadge);
       }
 
-      // 로딩 상태
       if (status === 'loading') {
         const loadingEl = document.createElement('p');
         loadingEl.className = 'loading-state';
@@ -217,7 +211,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 오류 상태
       if (status === 'error') {
         const errorEl = document.createElement('div');
         errorEl.className = 'error-state';
@@ -229,7 +222,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 데이터 검증 및 복사 후 at 최신순 정렬
       const rawEvents = Array.isArray(data) ? [...data] : [];
       if (rawEvents.length === 0) {
         const emptyEl = document.createElement('p');
@@ -239,21 +231,18 @@ export function createStudentView() {
         return container;
       }
 
-      // at 기준 내림차순(최신순) 정렬
       rawEvents.sort((a, b) => {
         const timeA = new Date(a.at || 0).getTime();
         const timeB = new Date(b.at || 0).getTime();
         return timeB - timeA;
       });
 
-      // 필터 상태 유지 객체
       const filterState = {
         kind: 'all',
         appId: 'all',
         access: 'all',
       };
 
-      // 매핑 사전
       const kindMap = {
         access: '접속 기록(access)',
         xdr: 'XDR 경보(xdr)',
@@ -278,11 +267,9 @@ export function createStudentView() {
         unknown: '확인 불가(unknown)',
       };
 
-      // 필터 영역 생성
       const filterBar = document.createElement('div');
       filterBar.className = 'events-filter-bar';
 
-      // 1) 기록 종류 필터
       const kindLabel = document.createElement('label');
       kindLabel.textContent = '기록 종류: ';
       const kindSelect = document.createElement('select');
@@ -302,7 +289,6 @@ export function createStudentView() {
       kindLabel.appendChild(kindSelect);
       filterBar.appendChild(kindLabel);
 
-      // 2) 업무 앱 필터
       const appLabel = document.createElement('label');
       appLabel.textContent = ' 업무 앱: ';
       const appSelect = document.createElement('select');
@@ -322,7 +308,6 @@ export function createStudentView() {
       appLabel.appendChild(appSelect);
       filterBar.appendChild(appLabel);
 
-      // 3) 접속 상태 필터
       const accessLabel = document.createElement('label');
       accessLabel.textContent = ' 접속 상태: ';
       const accessSelect = document.createElement('select');
@@ -344,7 +329,6 @@ export function createStudentView() {
 
       container.appendChild(filterBar);
 
-      // 목록 및 상세 영역
       const listContainer = document.createElement('div');
       listContainer.className = 'events-list-container';
 
@@ -353,7 +337,7 @@ export function createStudentView() {
 
       function renderFilteredList() {
         listContainer.textContent = '';
-        detailArea.textContent = ''; // 목록 갱신 시 기존 상세 닫기
+        detailArea.textContent = '';
 
         const filtered = rawEvents.filter((ev) => {
           if (filterState.kind !== 'all' && ev.kind !== filterState.kind) return false;
@@ -387,32 +371,26 @@ export function createStudentView() {
           const row = document.createElement('tr');
           row.setAttribute('data-student-event-id', ev.id);
 
-          // ID
           const tdId = document.createElement('td');
           tdId.textContent = ev.id || '확인 불가';
           row.appendChild(tdId);
 
-          // 시각
           const tdTime = document.createElement('td');
           tdTime.textContent = ev.at || '확인 불가';
           row.appendChild(tdTime);
 
-          // 종류
           const tdKind = document.createElement('td');
           tdKind.textContent = kindMap[ev.kind] || ev.kind || '확인 불가';
           row.appendChild(tdKind);
 
-          // 앱
           const tdApp = document.createElement('td');
           tdApp.textContent = ev.appId || '앱 확인 불가';
           row.appendChild(tdApp);
 
-          // 요약
           const tdSummary = document.createElement('td');
           tdSummary.textContent = ev.summary || '요약 없음';
           row.appendChild(tdSummary);
 
-          // 상세 버튼
           const tdAction = document.createElement('td');
           const detailBtn = document.createElement('button');
           detailBtn.setAttribute('type', 'button');
@@ -446,7 +424,6 @@ export function createStudentView() {
         appLi.textContent = `업무 앱: ${ev.appId || '앱 확인 불가'}`;
         infoList.appendChild(appLi);
 
-        // 3대 상태
         const accessStateText = accessMap[ev.state?.access] || '확인 불가(unknown)';
         const sessionStateText = sessionStatusMap[ev.state?.session] || '확인 불가(unknown)';
         const deviceStateText = deviceStatusMap[ev.state?.device] || '확인 불가(unknown)';
@@ -463,7 +440,6 @@ export function createStudentView() {
         deviceLi.textContent = `기기 상태: ${deviceStateText}`;
         infoList.appendChild(deviceLi);
 
-        // 근거 (evidence)
         const evidenceLi = document.createElement('li');
         evidenceLi.textContent = '근거(Evidence):';
         const evUl = document.createElement('ul');
@@ -481,7 +457,6 @@ export function createStudentView() {
         evidenceLi.appendChild(evUl);
         infoList.appendChild(evidenceLi);
 
-        // 규칙 (rules)
         const rulesLi = document.createElement('li');
         rulesLi.textContent = '적용 규칙(Rules):';
         const ruleUl = document.createElement('ul');
@@ -499,10 +474,28 @@ export function createStudentView() {
         rulesLi.appendChild(ruleUl);
         infoList.appendChild(rulesLi);
 
+        // 16단계 요건: 미지원 조치(unsupported_action)가 넘어온 경우 비활성 안내 버튼 렌더링
+        if (Array.isArray(ev.supportedActions) && ev.supportedActions.length > 0) {
+          const actionsLi = document.createElement('li');
+          actionsLi.className = 'unsupported-actions-container';
+
+          const actionNotice = document.createElement('p');
+          actionNotice.textContent = '조치 실행 연결은 준비 중입니다';
+          actionsLi.appendChild(actionNotice);
+
+          ev.supportedActions.forEach((act) => {
+            const disabledBtn = document.createElement('button');
+            disabledBtn.setAttribute('type', 'button');
+            disabledBtn.disabled = true;
+            disabledBtn.textContent = `${act} 미지원`;
+            actionsLi.appendChild(disabledBtn);
+          });
+          infoList.appendChild(actionsLi);
+        }
+
         detailArea.appendChild(infoList);
       }
 
-      // 이벤트 리스너 연결
       kindSelect.onchange = (e) => {
         filterState.kind = e.target.value;
         renderFilteredList();
@@ -516,7 +509,6 @@ export function createStudentView() {
         renderFilteredList();
       };
 
-      // 초기 렌더링
       renderFilteredList();
 
       container.appendChild(listContainer);
@@ -524,7 +516,222 @@ export function createStudentView() {
       return container;
     },
 
-    renderStatus() { return '학생 구현 대기: 기기·세션·알림과 연결 점검 상태를 구분해서 연결하세요.'; },
+    /**
+     * 16단계: 알림, 빈 상태, 오류, 진단 정보 정리 및 도움정보 복사
+     * 수정 대상: renderStatus
+     */
+    renderStatus({ devices, sessions, notifications, diagnostics, mode }) {
+      const container = document.createElement('div');
+      container.className = 'student-status-container';
+
+      // 1. 모드 안내
+      const modeMap = {
+        demo: '예제 자료',
+        disconnected: '연결 없음',
+        unknown: '확인 불가',
+      };
+      const currentMode = mode || devices?.mode || sessions?.mode || diagnostics?.mode;
+      if (currentMode && modeMap[currentMode]) {
+        const modeBadge = document.createElement('div');
+        modeBadge.className = 'status-badge mode-notice';
+        modeBadge.textContent = modeMap[currentMode];
+        container.appendChild(modeBadge);
+      }
+
+      // 2. 알림 (notifications) 영역
+      const notiSection = document.createElement('section');
+      notiSection.className = 'status-section notifications-section';
+      const notiTitle = document.createElement('h3');
+      notiTitle.textContent = '보안 알림';
+      notiSection.appendChild(notiTitle);
+
+      const notiList = Array.isArray(notifications) ? notifications : [];
+      if (notiList.length === 0) {
+        const noNoti = document.createElement('p');
+        noNoti.className = 'empty-notice';
+        noNoti.textContent = '주의할 알림이 없습니다';
+        notiSection.appendChild(noNoti);
+      } else {
+        const ul = document.createElement('ul');
+        notiList.forEach((n) => {
+          const li = document.createElement('li');
+          const res = n.resource || '확인 불가';
+          const code = n.code || '알림';
+          const msg = n.message || '';
+          li.textContent = `[${res}] (${code}) ${msg}`;
+          ul.appendChild(li);
+        });
+        notiSection.appendChild(ul);
+      }
+      container.appendChild(notiSection);
+
+      // 3. 등록 기기 (devices) 영역
+      const deviceSection = document.createElement('section');
+      deviceSection.className = 'status-section devices-section';
+      const devTitle = document.createElement('h3');
+      devTitle.textContent = '등록 기기 상태';
+      deviceSection.appendChild(devTitle);
+
+      if (devices?.status === 'loading') {
+        const devLoading = document.createElement('p');
+        devLoading.textContent = '기기 정보 불러오는 중';
+        deviceSection.appendChild(devLoading);
+      } else if (devices?.status === 'error') {
+        const devErr = document.createElement('div');
+        devErr.className = 'error-block';
+        const msg = devices?.error?.message || '알 수 없는 오류';
+        const isTimeout = msg.toLowerCase().includes('timeout') || msg.includes('시간 초과');
+        const errText = document.createElement('p');
+        errText.textContent = `기기 목록을 불러오지 못했습니다: ${msg}${isTimeout ? ' (시간 초과)' : ''}`;
+        devErr.appendChild(errText);
+
+        const retryNotice = document.createElement('p');
+        retryNotice.className = 'retry-guidance';
+        retryNotice.textContent = '다시 시도는 위쪽 다시 불러오기 버튼을 직접 누르세요.';
+        devErr.appendChild(retryNotice);
+
+        deviceSection.appendChild(devErr);
+      } else {
+        const devArray = Array.isArray(devices?.data) ? devices.data : [];
+        if (devArray.length === 0) {
+          const emptyDev = document.createElement('p');
+          emptyDev.textContent = '등록된 기기가 없음';
+          deviceSection.appendChild(emptyDev);
+        } else {
+          const ul = document.createElement('ul');
+          devArray.forEach((d) => {
+            const li = document.createElement('li');
+            li.textContent = `기기: ${d.label || d.id || '확인 불가'} (${d.status || 'unknown'})`;
+            ul.appendChild(li);
+          });
+          deviceSection.appendChild(ul);
+        }
+      }
+      container.appendChild(deviceSection);
+
+      // 4. 세션 (sessions) 영역 - 현재 검증된 연결 하나만 다룸
+      const sessionSection = document.createElement('section');
+      sessionSection.className = 'status-section sessions-section';
+      const sessTitle = document.createElement('h3');
+      sessTitle.textContent = '현재 세션 연결 상태';
+      sessionSection.appendChild(sessTitle);
+
+      const sessScopeNotice = document.createElement('p');
+      sessScopeNotice.className = 'scope-subtext';
+      sessScopeNotice.textContent = '세션 조회는 지금 검증된 연결 하나만 대상으로 하며 과거 세션 목록이 아닙니다.';
+      sessionSection.appendChild(sessScopeNotice);
+
+      if (sessions?.status === 'loading') {
+        const sessLoading = document.createElement('p');
+        sessLoading.textContent = '세션 정보 불러오는 중';
+        sessionSection.appendChild(sessLoading);
+      } else if (sessions?.status === 'error') {
+        const sessErr = document.createElement('div');
+        sessErr.className = 'error-block';
+        const msg = sessions?.error?.message || '알 수 없는 오류';
+        const isTimeout = msg.toLowerCase().includes('timeout') || msg.includes('시간 초과');
+        const errText = document.createElement('p');
+        errText.textContent = `세션 정보를 불러오지 못했습니다: ${msg}${isTimeout ? ' (시간 초과)' : ''}`;
+        sessErr.appendChild(errText);
+
+        const retryNotice = document.createElement('p');
+        retryNotice.className = 'retry-guidance';
+        retryNotice.textContent = '다시 시도는 위쪽 다시 불러오기 버튼을 직접 누르세요.';
+        sessErr.appendChild(retryNotice);
+
+        sessionSection.appendChild(sessErr);
+      } else {
+        const sessData = sessions?.data;
+        const sessArray = Array.isArray(sessData) ? sessData : (sessData ? [sessData] : []);
+        if (sessArray.length === 0) {
+          const emptySess = document.createElement('p');
+          emptySess.textContent = '현재 연결 없음';
+          sessionSection.appendChild(emptySess);
+        } else {
+          const ul = document.createElement('ul');
+          sessArray.forEach((s) => {
+            const li = document.createElement('li');
+            li.textContent = `세션: ${s.id || '확인 불가'} (${s.status || 'unknown'})`;
+            ul.appendChild(li);
+          });
+          sessionSection.appendChild(ul);
+        }
+      }
+      container.appendChild(sessionSection);
+
+      // 5. 진단 정보 (diagnostics) 및 도움정보 복사
+      const diagSection = document.createElement('section');
+      diagSection.className = 'status-section diagnostics-section';
+      const diagTitle = document.createElement('h3');
+      diagTitle.textContent = '시스템 진단 정보';
+      diagSection.appendChild(diagTitle);
+
+      if (diagnostics?.status === 'loading') {
+        const diagLoading = document.createElement('p');
+        diagLoading.textContent = '진단 정보 불러오는 중';
+        diagSection.appendChild(diagLoading);
+      } else if (diagnostics?.status === 'error') {
+        const diagErr = document.createElement('div');
+        diagErr.className = 'error-block';
+        const msg = diagnostics?.error?.message || '알 수 없는 오류';
+        const errText = document.createElement('p');
+        errText.textContent = `진단 정보를 불러오지 못했습니다: ${msg}`;
+        diagErr.appendChild(errText);
+
+        const retryNotice = document.createElement('p');
+        retryNotice.className = 'retry-guidance';
+        retryNotice.textContent = '다시 시도는 위쪽 다시 불러오기 버튼을 직접 누르세요.';
+        diagErr.appendChild(retryNotice);
+
+        diagSection.appendChild(diagErr);
+      } else {
+        const diagData = diagnostics?.data || {};
+        const safeDiag = {
+          requestId: diagData.requestId || '확인 불가',
+          component: diagData.component || '확인 불가',
+          version: diagData.version || '확인 불가',
+          checkedAt: diagData.checkedAt || '확인 불가',
+          'engine.mode': diagData.engine?.mode || '확인 불가',
+          'engine.code': diagData.engine?.code || '확인 불가',
+        };
+
+        const diagUl = document.createElement('ul');
+        diagUl.className = 'diagnostics-fields-list';
+        Object.entries(safeDiag).forEach(([k, v]) => {
+          const li = document.createElement('li');
+          li.textContent = `${k}: ${v}`;
+          diagUl.appendChild(li);
+        });
+        diagSection.appendChild(diagUl);
+
+        // 복사 안내 문구
+        const copyNotice = document.createElement('p');
+        copyNotice.className = 'copy-guide-text';
+        copyNotice.textContent = '이 정보는 고객지원 및 오류 문의 시 도움 요청에 쓰도록 복사하는 정보입니다.';
+        diagSection.appendChild(copyNotice);
+
+        // 이름이 정확히 "도움정보 복사"인 버튼
+        const copyBtn = document.createElement('button');
+        copyBtn.setAttribute('type', 'button');
+        copyBtn.textContent = '도움정보 복사';
+        copyBtn.onclick = () => {
+          const copyPayload = JSON.stringify(safeDiag, null, 2);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(copyPayload).then(() => {
+              copyBtn.textContent = '도움정보 복사 완료';
+              setTimeout(() => {
+                copyBtn.textContent = '도움정보 복사';
+              }, 2000);
+            }).catch(() => {});
+          }
+        };
+        diagSection.appendChild(copyBtn);
+      }
+      container.appendChild(diagSection);
+
+      return container;
+    },
+
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·osv 출처·조회 시각을 연결하세요.'; },
     renderAiConnection() { return '학생 구현 대기: 모델 응답 점검과 실제 사건 설명을 연결하세요.'; },
     renderExplanation() { return '학생 구현 대기: 선택한 사건의 근거·규칙·현재 상태와 모드를 연결하세요.'; },
