@@ -41,7 +41,7 @@ export function createStudentView() {
         return container;
       }
 
-      if (me?.status === 'error' || devices?.status === 'error' || sessions?.status === 'error') {
+      if (me?.status === 'error' || devices?.status === 'error' || sessions?.error) {
         const errorEl = document.createElement('div');
         errorEl.className = 'error-state';
 
@@ -474,7 +474,6 @@ export function createStudentView() {
         rulesLi.appendChild(ruleUl);
         infoList.appendChild(rulesLi);
 
-        // 16단계 요건: 미지원 조치(unsupported_action)가 넘어온 경우 비활성 안내 버튼 렌더링
         if (Array.isArray(ev.supportedActions) && ev.supportedActions.length > 0) {
           const actionsLi = document.createElement('li');
           actionsLi.className = 'unsupported-actions-container';
@@ -516,15 +515,10 @@ export function createStudentView() {
       return container;
     },
 
-    /**
-     * 16단계: 알림, 빈 상태, 오류, 진단 정보 정리 및 도움정보 복사
-     * 수정 대상: renderStatus
-     */
     renderStatus({ devices, sessions, notifications, diagnostics, mode }) {
       const container = document.createElement('div');
       container.className = 'student-status-container';
 
-      // 1. 모드 안내
       const modeMap = {
         demo: '예제 자료',
         disconnected: '연결 없음',
@@ -538,7 +532,6 @@ export function createStudentView() {
         container.appendChild(modeBadge);
       }
 
-      // 2. 알림 (notifications) 영역
       const notiSection = document.createElement('section');
       notiSection.className = 'status-section notifications-section';
       const notiTitle = document.createElement('h3');
@@ -565,7 +558,6 @@ export function createStudentView() {
       }
       container.appendChild(notiSection);
 
-      // 3. 등록 기기 (devices) 영역
       const deviceSection = document.createElement('section');
       deviceSection.className = 'status-section devices-section';
       const devTitle = document.createElement('h3');
@@ -609,7 +601,6 @@ export function createStudentView() {
       }
       container.appendChild(deviceSection);
 
-      // 4. 세션 (sessions) 영역 - 현재 검증된 연결 하나만 다룸
       const sessionSection = document.createElement('section');
       sessionSection.className = 'status-section sessions-section';
       const sessTitle = document.createElement('h3');
@@ -659,7 +650,6 @@ export function createStudentView() {
       }
       container.appendChild(sessionSection);
 
-      // 5. 진단 정보 (diagnostics) 및 도움정보 복사
       const diagSection = document.createElement('section');
       diagSection.className = 'status-section diagnostics-section';
       const diagTitle = document.createElement('h3');
@@ -704,13 +694,11 @@ export function createStudentView() {
         });
         diagSection.appendChild(diagUl);
 
-        // 복사 안내 문구
         const copyNotice = document.createElement('p');
         copyNotice.className = 'copy-guide-text';
         copyNotice.textContent = '이 정보는 고객지원 및 오류 문의 시 도움 요청에 쓰도록 복사하는 정보입니다.';
         diagSection.appendChild(copyNotice);
 
-        // 이름이 정확히 "도움정보 복사"인 버튼
         const copyBtn = document.createElement('button');
         copyBtn.setAttribute('type', 'button');
         copyBtn.textContent = '도움정보 복사';
@@ -733,8 +721,194 @@ export function createStudentView() {
     },
 
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·osv 출처·조회 시각을 연결하세요.'; },
-    renderAiConnection() { return '학생 구현 대기: 모델 응답 점검과 실제 사건 설명을 연결하세요.'; },
-    renderExplanation() { return '학생 구현 대기: 선택한 사건의 근거·규칙·현재 상태와 모드를 연결하세요.'; },
+
+    /**
+     * 17단계: AI 연결 상태 표시 및 연결 점검 결과 분리
+     * 수정 대상: renderAiConnection
+     */
+    renderAiConnection({ status, mode, data, error, checkedAt }) {
+      const container = document.createElement('div');
+      container.className = 'student-ai-connection-container';
+
+      const modeMap = {
+        demo: '예제 자료',
+        disconnected: '연결 없음',
+        unknown: '확인 불가',
+      };
+      if (mode && modeMap[mode]) {
+        const modeBadge = document.createElement('div');
+        modeBadge.className = 'status-badge mode-notice';
+        modeBadge.textContent = modeMap[mode];
+        container.appendChild(modeBadge);
+      }
+
+      // 1. 점검 전 상태 (idle)
+      if (status === 'idle') {
+        const idleEl = document.createElement('p');
+        idleEl.className = 'ai-state idle-state';
+        idleEl.textContent = 'AI 연결 점검 전';
+        container.appendChild(idleEl);
+
+        const guideEl = document.createElement('p');
+        guideEl.className = 'ai-guide-text';
+        guideEl.textContent = '다시 점검은 사용자가 버튼을 직접 누르는 것입니다.';
+        container.appendChild(guideEl);
+        return container;
+      }
+
+      // 2. 점검 중 상태 (loading)
+      if (status === 'loading') {
+        const loadingEl = document.createElement('p');
+        loadingEl.className = 'ai-state loading-state';
+        loadingEl.textContent = 'AI 연결 점검 중';
+        container.appendChild(loadingEl);
+        return container;
+      }
+
+      // 3. 점검 오류 상태 (error) - 원인별 세분화 안내, 열쇠 미포함
+      if (status === 'error') {
+        const errorEl = document.createElement('div');
+        errorEl.className = 'ai-state error-state';
+
+        const rawCode = String(error?.code || 'UNKNOWN').toUpperCase();
+        const safeMsg = error?.message || '알 수 없는 오류';
+
+        let causeCategory = '확인 불가';
+        let actionGuide = '담당자에게 계정 연결과 앱 권한 확인 요청이 필요합니다.';
+
+        if (rawCode.includes('AUTH') || rawCode.includes('UNAUTHENTICATED')) {
+          causeCategory = '인증 실패';
+          actionGuide = '계정 연결 상태를 다시 확인하고, 담당자 확인을 요청하세요.';
+        } else if (rawCode.includes('PERMISSION') || rawCode.includes('FORBIDDEN') || rawCode.includes('ACCESS')) {
+          causeCategory = '접근 제한';
+          actionGuide = '계정 연결을 다시 확인하거나 담당자에게 권한 승인을 요청하세요.';
+        } else if (rawCode.includes('PREPARING') || rawCode.includes('NOT_READY') || rawCode.includes('PENDING')) {
+          causeCategory = '권한 준비 중';
+          actionGuide = '담당자에게 계정 연결과 앱 권한 발급을 확인 요청하세요.';
+        } else if (rawCode.includes('QUOTA') || rawCode.includes('LIMIT') || rawCode.includes('USAGE')) {
+          causeCategory = '사용량·한도 초과';
+          actionGuide = '반 사용량 또는 이용 한도를 초과했습니다. 담당자에게 확인을 요청하세요.';
+        } else if (rawCode.includes('SCHEDULE') || rawCode.includes('HOURS') || rawCode.includes('TIME_WINDOW')) {
+          causeCategory = '이용 시간 아님';
+          actionGuide = '현재는 서비스 이용 시간이 아닙니다. 이용 가능 시간을 확인하세요.';
+        } else if (rawCode.includes('TIMEOUT') || rawCode.includes('NETWORK') || rawCode.includes('RATE')) {
+          causeCategory = '요청 제한·시간 초과·네트워크 오류';
+          actionGuide = '잠시 뒤 다시 점검 버튼을 직접 눌러 점검하세요.';
+        } else if (rawCode.includes('CANCEL') || rawCode.includes('ABORT')) {
+          causeCategory = '점검 취소';
+          actionGuide = '점검이 취소되었습니다. 이전 결과는 현재 결과가 아닙니다.';
+        } else if (rawCode.includes('NO_MODEL') || rawCode.includes('MODEL_NOT_FOUND')) {
+          causeCategory = '쓸 수 있는 모델 없음';
+          actionGuide = '담당자에게 사용할 수 있는 AI 모델 허용 설정을 확인 요청하세요.';
+        }
+
+        const titleP = document.createElement('p');
+        titleP.textContent = `연결 실패 [${causeCategory}]: ${safeMsg}`;
+        errorEl.appendChild(titleP);
+
+        const codeP = document.createElement('p');
+        codeP.textContent = `오류 코드: ${error?.code || 'ERROR'}`;
+        errorEl.appendChild(codeP);
+
+        const guideP = document.createElement('p');
+        guideP.textContent = actionGuide;
+        errorEl.appendChild(guideP);
+
+        const retryNotice = document.createElement('p');
+        retryNotice.className = 'retry-guidance';
+        retryNotice.textContent = '자동으로 다시 점검하지 않습니다. 다시 점검은 사용자가 버튼을 직접 누르는 것입니다.';
+        errorEl.appendChild(retryNotice);
+
+        container.appendChild(errorEl);
+        return container;
+      }
+
+      // 4. 점검 완료 상태 (ok) - audienceAuthorization test/verified 구분, 시각 및 개수 표기
+      const authType = data?.audienceAuthorization;
+      const authLabel = authType === 'verified'
+        ? '앱 권한 확인 후 점검(verified)'
+        : '시험 연결 점검(test)';
+
+      const modelCountText = data?.modelCount !== undefined ? `${data.modelCount}개` : '확인 불가';
+      const checkTime = checkedAt || data?.checkedAt || '시각 확인 불가';
+
+      const okList = document.createElement('ul');
+      okList.className = 'ai-connection-detail-list';
+
+      const authLi = document.createElement('li');
+      authLi.textContent = `권한 확인: ${authLabel}`;
+      okList.appendChild(authLi);
+
+      const countLi = document.createElement('li');
+      countLi.textContent = `사용 가능한 모델 수: ${modelCountText}`;
+      okList.appendChild(countLi);
+
+      const timeLi = document.createElement('li');
+      timeLi.textContent = `점검 시각: ${checkTime}`;
+      okList.appendChild(timeLi);
+
+      const distinctNotice = document.createElement('li');
+      distinctNotice.className = 'distinct-scope-notice';
+      distinctNotice.textContent = '사건 설명은 아직 실행하지 않았습니다. (현재 상태는 API 연결 점검 결과만 반영되어 있습니다)';
+      okList.appendChild(distinctNotice);
+
+      container.appendChild(okList);
+      return container;
+    },
+
+    /**
+     * 17단계: renderExplanation 기초 구현
+     */
+    renderExplanation({ event, explanation }) {
+      const container = document.createElement('div');
+      container.className = 'student-explanation-container';
+
+      if (!explanation || explanation.status === 'idle') {
+        const idleP = document.createElement('p');
+        idleP.textContent = '사건 설명을 요청하기 전입니다';
+        container.appendChild(idleP);
+        return container;
+      }
+
+      if (explanation.status === 'loading') {
+        const loadingP = document.createElement('p');
+        loadingP.textContent = '사건 설명 생성 중';
+        container.appendChild(loadingP);
+        return container;
+      }
+
+      // 성공 시에만 data-student-explanation-event 속성 부여
+      if (explanation.status === 'ok') {
+        if (event?.id) {
+          container.setAttribute('data-student-explanation-event', event.id);
+        }
+        const eventP = document.createElement('p');
+        eventP.textContent = `사건 ID: ${event?.id || '확인 불가'}`;
+        container.appendChild(eventP);
+
+        const summaryP = document.createElement('p');
+        summaryP.textContent = `설명 요약: ${explanation?.data?.summary || '요약 없음'}`;
+        container.appendChild(summaryP);
+        return container;
+      }
+
+      // 실패 시 속성을 부여하지 않고 오류와 원본 보존 안내 표시
+      if (explanation.status === 'error') {
+        const errP = document.createElement('p');
+        const errCode = explanation?.error?.code || 'ERROR';
+        const errMsg = explanation?.error?.message || '설명 생성 실패';
+        errP.textContent = `설명 생성 실패 (${errCode}): ${errMsg}`;
+        container.appendChild(errP);
+
+        const safeP = document.createElement('p');
+        safeP.textContent = '사건 설명 요청에 실패했으며 기존 보안 기록은 그대로 유지됩니다.';
+        container.appendChild(safeP);
+        return container;
+      }
+
+      return container;
+    },
+
     renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 모드를 연결하세요.'; },
   };
 }
