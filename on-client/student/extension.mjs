@@ -723,8 +723,8 @@ export function createStudentView() {
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·osv 출처·조회 시각을 연결하세요.'; },
 
     /**
-     * 17단계: AI 연결 상태 표시 및 연결 점검 결과 분리
-     * 수정 대상: renderAiConnection
+     * 17단계: AI 연결 상태 표시
+     * 과제 공식 오류 코드 매핑 보완 (WB_CLCO_COHORT_BUDGET_EXHAUSTED, WB_CLCO_SESSION_CLOSED, ON_AI_MODEL_LIST_EMPTY)
      */
     renderAiConnection({ status, mode, data, error, checkedAt }) {
       const container = document.createElement('div');
@@ -765,7 +765,7 @@ export function createStudentView() {
         return container;
       }
 
-      // 3. 점검 오류 상태 (error) - 원인별 세분화 안내, 열쇠 미포함
+      // 3. 점검 오류 상태 (error)
       if (status === 'error') {
         const errorEl = document.createElement('div');
         errorEl.className = 'ai-state error-state';
@@ -776,7 +776,34 @@ export function createStudentView() {
         let causeCategory = '확인 불가';
         let actionGuide = '담당자에게 계정 연결과 앱 권한 확인 요청이 필요합니다.';
 
-        if (rawCode.includes('AUTH') || rawCode.includes('UNAUTHENTICATED')) {
+        // 실제 공식 에러 코드 및 키워드 매핑
+        if (
+          rawCode.includes('WB_CLCO_COHORT_BUDGET_EXHAUSTED') ||
+          rawCode.includes('BUDGET_EXHAUSTED') ||
+          rawCode.includes('QUOTA') ||
+          rawCode.includes('LIMIT') ||
+          rawCode.includes('USAGE')
+        ) {
+          causeCategory = '반 사용량·이용 한도';
+          actionGuide = '반 사용량 또는 이용 한도를 초과했습니다. 담당자에게 확인을 요청하세요.';
+        } else if (
+          rawCode.includes('WB_CLCO_SESSION_CLOSED') ||
+          rawCode.includes('SESSION_CLOSED') ||
+          rawCode.includes('SCHEDULE') ||
+          rawCode.includes('HOURS') ||
+          rawCode.includes('TIME_WINDOW')
+        ) {
+          causeCategory = '이용 시간 아님';
+          actionGuide = '현재는 서비스 이용 시간이 아닙니다. 이용 가능 시간을 확인하세요.';
+        } else if (
+          rawCode.includes('ON_AI_MODEL_LIST_EMPTY') ||
+          rawCode.includes('MODEL_LIST_EMPTY') ||
+          rawCode.includes('NO_MODEL') ||
+          rawCode.includes('MODEL_NOT_FOUND')
+        ) {
+          causeCategory = '쓸 수 있는 모델 없음';
+          actionGuide = '담당자에게 사용할 수 있는 AI 모델 허용 설정을 확인 요청하세요.';
+        } else if (rawCode.includes('AUTH') || rawCode.includes('UNAUTHENTICATED')) {
           causeCategory = '인증 실패';
           actionGuide = '계정 연결 상태를 다시 확인하고, 담당자 확인을 요청하세요.';
         } else if (rawCode.includes('PERMISSION') || rawCode.includes('FORBIDDEN') || rawCode.includes('ACCESS')) {
@@ -785,21 +812,12 @@ export function createStudentView() {
         } else if (rawCode.includes('PREPARING') || rawCode.includes('NOT_READY') || rawCode.includes('PENDING')) {
           causeCategory = '권한 준비 중';
           actionGuide = '담당자에게 계정 연결과 앱 권한 발급을 확인 요청하세요.';
-        } else if (rawCode.includes('QUOTA') || rawCode.includes('LIMIT') || rawCode.includes('USAGE')) {
-          causeCategory = '사용량·한도 초과';
-          actionGuide = '반 사용량 또는 이용 한도를 초과했습니다. 담당자에게 확인을 요청하세요.';
-        } else if (rawCode.includes('SCHEDULE') || rawCode.includes('HOURS') || rawCode.includes('TIME_WINDOW')) {
-          causeCategory = '이용 시간 아님';
-          actionGuide = '현재는 서비스 이용 시간이 아닙니다. 이용 가능 시간을 확인하세요.';
         } else if (rawCode.includes('TIMEOUT') || rawCode.includes('NETWORK') || rawCode.includes('RATE')) {
-          causeCategory = '요청 제한·시간 초과·네트워크 오류';
+          causeCategory = '요청 제한·시간 초과·네트워크';
           actionGuide = '잠시 뒤 다시 점검 버튼을 직접 눌러 점검하세요.';
         } else if (rawCode.includes('CANCEL') || rawCode.includes('ABORT')) {
-          causeCategory = '점검 취소';
+          causeCategory = '취소';
           actionGuide = '점검이 취소되었습니다. 이전 결과는 현재 결과가 아닙니다.';
-        } else if (rawCode.includes('NO_MODEL') || rawCode.includes('MODEL_NOT_FOUND')) {
-          causeCategory = '쓸 수 있는 모델 없음';
-          actionGuide = '담당자에게 사용할 수 있는 AI 모델 허용 설정을 확인 요청하세요.';
         }
 
         const titleP = document.createElement('p');
@@ -823,7 +841,7 @@ export function createStudentView() {
         return container;
       }
 
-      // 4. 점검 완료 상태 (ok) - audienceAuthorization test/verified 구분, 시각 및 개수 표기
+      // 4. 점검 완료 상태 (ok)
       const authType = data?.audienceAuthorization;
       const authLabel = authType === 'verified'
         ? '앱 권한 확인 후 점검(verified)'
@@ -856,9 +874,6 @@ export function createStudentView() {
       return container;
     },
 
-    /**
-     * 17단계: renderExplanation 기초 구현
-     */
     renderExplanation({ event, explanation }) {
       const container = document.createElement('div');
       container.className = 'student-explanation-container';
@@ -877,7 +892,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 성공 시에만 data-student-explanation-event 속성 부여
       if (explanation.status === 'ok') {
         if (event?.id) {
           container.setAttribute('data-student-explanation-event', event.id);
@@ -892,7 +906,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 실패 시 속성을 부여하지 않고 오류와 원본 보존 안내 표시
       if (explanation.status === 'error') {
         const errP = document.createElement('p');
         const errCode = explanation?.error?.code || 'ERROR';
