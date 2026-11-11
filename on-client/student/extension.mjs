@@ -722,10 +722,6 @@ export function createStudentView() {
 
     renderVulnerabilities() { return '학생 구현 대기: 정확한 설치 버전·osv 출처·조회 시각을 연결하세요.'; },
 
-    /**
-     * 17단계: AI 연결 상태 표시
-     * 과제 공식 오류 코드 매핑 보완 (WB_CLCO_COHORT_BUDGET_EXHAUSTED, WB_CLCO_SESSION_CLOSED, ON_AI_MODEL_LIST_EMPTY)
-     */
     renderAiConnection({ status, mode, data, error, checkedAt }) {
       const container = document.createElement('div');
       container.className = 'student-ai-connection-container';
@@ -742,7 +738,6 @@ export function createStudentView() {
         container.appendChild(modeBadge);
       }
 
-      // 1. 점검 전 상태 (idle)
       if (status === 'idle') {
         const idleEl = document.createElement('p');
         idleEl.className = 'ai-state idle-state';
@@ -756,7 +751,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 2. 점검 중 상태 (loading)
       if (status === 'loading') {
         const loadingEl = document.createElement('p');
         loadingEl.className = 'ai-state loading-state';
@@ -765,7 +759,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 3. 점검 오류 상태 (error)
       if (status === 'error') {
         const errorEl = document.createElement('div');
         errorEl.className = 'ai-state error-state';
@@ -776,7 +769,6 @@ export function createStudentView() {
         let causeCategory = '확인 불가';
         let actionGuide = '담당자에게 계정 연결과 앱 권한 확인 요청이 필요합니다.';
 
-        // 실제 공식 에러 코드 및 키워드 매핑
         if (
           rawCode.includes('WB_CLCO_COHORT_BUDGET_EXHAUSTED') ||
           rawCode.includes('BUDGET_EXHAUSTED') ||
@@ -841,7 +833,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 4. 점검 완료 상태 (ok)
       const authType = data?.audienceAuthorization;
       const authLabel = authType === 'verified'
         ? '앱 권한 확인 후 점검(verified)'
@@ -874,48 +865,224 @@ export function createStudentView() {
       return container;
     },
 
-    renderExplanation({ event, explanation }) {
+    /**
+     * 18단계: 근거에 연결된 AI 보안 이벤트 설명 완성
+     */
+    renderExplanation({ event, explanation, checkedAt }) {
       const container = document.createElement('div');
       container.className = 'student-explanation-container';
 
+      // 1. explanation 오류 처리 (event가 null이어도 오류 메시지와 사유를 먼저 표시)
+      if (explanation?.status === 'error') {
+        const errEl = document.createElement('div');
+        errEl.className = 'explanation-error-block';
+
+        const safeCode = explanation.error?.code || 'ERROR';
+        const safeMsg = explanation.error?.message || '설명 생성 실패';
+
+        const errTitle = document.createElement('p');
+        errTitle.textContent = `AI 설명 실패: ${safeMsg}`;
+        errEl.appendChild(errTitle);
+
+        const codeP = document.createElement('p');
+        codeP.textContent = `오류 코드: ${safeCode}`;
+        errEl.appendChild(codeP);
+
+        const rawCodeUpper = String(safeCode).toUpperCase();
+        if (explanation.data?.executed === true || rawCodeUpper.includes('EXECUTED')) {
+          const executedNotice = document.createElement('p');
+          executedNotice.textContent = 'AI가 이미 실행했다고 답한 설명은 쓸 수 없습니다.';
+          errEl.appendChild(executedNotice);
+        }
+
+        const safeP = document.createElement('p');
+        safeP.textContent = '기록은 그대로이며 과제 실패가 아닙니다.';
+        errEl.appendChild(safeP);
+
+        container.appendChild(errEl);
+        return container;
+      }
+
+      // 2. 오류가 없는데 event가 null인 경우: 기록 선택 안내
+      if (!event) {
+        const noEventP = document.createElement('p');
+        noEventP.className = 'explanation-notice no-event-notice';
+        noEventP.textContent = '보안 기록에서 기록을 먼저 고르세요';
+        container.appendChild(noEventP);
+        return container;
+      }
+
+      // 3. 로딩 상태
+      if (explanation?.status === 'loading') {
+        const loadingP = document.createElement('p');
+        loadingP.className = 'explanation-notice loading-notice';
+        loadingP.textContent = '설명 요청 중';
+        container.appendChild(loadingP);
+        return container;
+      }
+
+      // 4. 대기(idle) 상태
       if (!explanation || explanation.status === 'idle') {
         const idleP = document.createElement('p');
+        idleP.className = 'explanation-notice idle-notice';
         idleP.textContent = '사건 설명을 요청하기 전입니다';
         container.appendChild(idleP);
         return container;
       }
 
-      if (explanation.status === 'loading') {
-        const loadingP = document.createElement('p');
-        loadingP.textContent = '사건 설명 생성 중';
-        container.appendChild(loadingP);
-        return container;
-      }
-
+      // 5. 성공(ok) 상태 검증 및 렌더링
       if (explanation.status === 'ok') {
-        if (event?.id) {
-          container.setAttribute('data-student-explanation-event', event.id);
+        const expData = explanation.data || {};
+        const eventEvidenceList = Array.isArray(event.evidence) ? event.evidence : [];
+        const evidenceIdMap = new Map(eventEvidenceList.map((item) => [item.id, item.text]));
+
+        // 근거 검증: explanation의 evidenceIds가 event.evidence에 빠짐없이 존재하는지 대조
+        const citedIds = Array.isArray(expData.evidenceIds) ? expData.evidenceIds : [];
+        const hasMissingEvidence = citedIds.some((id) => !evidenceIdMap.has(id));
+
+        // 근거 불일치 또는 위조 ID 발생 시 설명 기각 (data-student-explanation-event 속성 부여 금지)
+        if (hasMissingEvidence) {
+          const mismatchEl = document.createElement('div');
+          mismatchEl.className = 'explanation-mismatch-block';
+
+          const failTitle = document.createElement('p');
+          failTitle.textContent = 'AI 설명을 쓸 수 없습니다: 근거가 맞지 않음';
+          mismatchEl.appendChild(failTitle);
+
+          const detailP = document.createElement('p');
+          detailP.textContent = '인용된 근거 ID가 사건 기록의 실제 근거와 일치하지 않아 내용을 지어내지 않고 기각합니다.';
+          mismatchEl.appendChild(detailP);
+
+          const safeP = document.createElement('p');
+          safeP.textContent = '기록은 그대로입니다.';
+          mismatchEl.appendChild(safeP);
+
+          container.appendChild(mismatchEl);
+          return container;
         }
-        const eventP = document.createElement('p');
-        eventP.textContent = `사건 ID: ${event?.id || '확인 불가'}`;
-        container.appendChild(eventP);
+
+        // 검증 통과: 성공 속성 부여
+        container.setAttribute('data-student-explanation-event', event.id);
+
+        // 1) 사건 ID 및 참고용 요약
+        const headerEl = document.createElement('div');
+        headerEl.className = 'explanation-header';
+
+        const eventIdP = document.createElement('p');
+        eventIdP.textContent = `사건 ID: ${event.id}`;
+        headerEl.appendChild(eventIdP);
+
+        const summaryTitle = document.createElement('h4');
+        summaryTitle.textContent = 'AI 설명(참고용)';
+        headerEl.appendChild(summaryTitle);
 
         const summaryP = document.createElement('p');
-        summaryP.textContent = `설명 요약: ${explanation?.data?.summary || '요약 없음'}`;
-        container.appendChild(summaryP);
-        return container;
-      }
+        summaryP.textContent = expData.summary || '요약 없음';
+        headerEl.appendChild(summaryP);
+        container.appendChild(headerEl);
 
-      if (explanation.status === 'error') {
-        const errP = document.createElement('p');
-        const errCode = explanation?.error?.code || 'ERROR';
-        const errMsg = explanation?.error?.message || '설명 생성 실패';
-        errP.textContent = `설명 생성 실패 (${errCode}): ${errMsg}`;
-        container.appendChild(errP);
+        // 2) 인용 근거 (evidenceIds)
+        const evidenceSection = document.createElement('div');
+        evidenceSection.className = 'explanation-sub-section';
+        const evTitle = document.createElement('h5');
+        evTitle.textContent = '인용 근거 목록';
+        evidenceSection.appendChild(evTitle);
 
-        const safeP = document.createElement('p');
-        safeP.textContent = '사건 설명 요청에 실패했으며 기존 보안 기록은 그대로 유지됩니다.';
-        container.appendChild(safeP);
+        const evUl = document.createElement('ul');
+        if (citedIds.length > 0) {
+          citedIds.forEach((eid) => {
+            const li = document.createElement('li');
+            const eText = evidenceIdMap.get(eid) || '근거 원문 없음';
+            li.textContent = `${eid} — ${eText}`;
+            evUl.appendChild(li);
+          });
+        } else {
+          const li = document.createElement('li');
+          li.textContent = '인용된 근거 ID 없음';
+          evUl.appendChild(li);
+        }
+        evidenceSection.appendChild(evUl);
+        container.appendChild(evidenceSection);
+
+        // 3) 규칙 목록 (event.rules)
+        const rulesSection = document.createElement('div');
+        rulesSection.className = 'explanation-sub-section';
+        const rulesTitle = document.createElement('h5');
+        rulesTitle.textContent = '적용 규칙 목록';
+        rulesSection.appendChild(rulesTitle);
+
+        const rulesUl = document.createElement('ul');
+        const eventRules = Array.isArray(event.rules) ? event.rules : [];
+        if (eventRules.length > 0) {
+          eventRules.forEach((rule) => {
+            const li = document.createElement('li');
+            li.textContent = `${rule.id || '규칙'} — ${rule.text || ''}`;
+            rulesUl.appendChild(li);
+          });
+        } else {
+          const li = document.createElement('li');
+          li.textContent = '적용된 규칙 없음';
+          rulesUl.appendChild(li);
+        }
+        rulesSection.appendChild(rulesUl);
+        container.appendChild(rulesSection);
+
+        // 4) 확인 불가 상태 목록 (access·session·device 중 unknown 분리)
+        const stateSection = document.createElement('div');
+        stateSection.className = 'explanation-sub-section';
+        const stateTitle = document.createElement('h5');
+        stateTitle.textContent = '확인 불가 상태 항목';
+        stateSection.appendChild(stateTitle);
+
+        const unknownList = [];
+        if (event.state?.access === 'unknown') unknownList.push('접속: 확인 불가(unknown)');
+        if (event.state?.session === 'unknown') unknownList.push('세션: 확인 불가(unknown)');
+        if (event.state?.device === 'unknown') unknownList.push('기기: 확인 불가(unknown)');
+
+        const stateUl = document.createElement('ul');
+        if (unknownList.length > 0) {
+          unknownList.forEach((txt) => {
+            const li = document.createElement('li');
+            li.textContent = txt;
+            stateUl.appendChild(li);
+          });
+        } else {
+          const li = document.createElement('li');
+          li.textContent = '없음';
+          stateUl.appendChild(li);
+        }
+        stateSection.appendChild(stateUl);
+        container.appendChild(stateSection);
+
+        // 5) 제안 (proposals) 처리
+        const proposalSection = document.createElement('div');
+        proposalSection.className = 'explanation-sub-section';
+        const propTitle = document.createElement('h5');
+        propTitle.textContent = '조치 제안';
+        proposalSection.appendChild(propTitle);
+
+        const proposals = Array.isArray(expData.proposals) ? expData.proposals : [];
+        const supportedActions = Array.isArray(event.supportedActions) ? event.supportedActions : [];
+
+        if (proposals.length === 0) {
+          const noPropP = document.createElement('p');
+          if (supportedActions.length === 0) {
+            noPropP.textContent = '연동 시스템이 지원하는 조치가 없어 제안이 없습니다(정상)';
+          } else {
+            noPropP.textContent = 'AI가 제안한 조치가 없습니다.';
+          }
+          proposalSection.appendChild(noPropP);
+        } else {
+          const propUl = document.createElement('ul');
+          proposals.forEach((p) => {
+            const li = document.createElement('li');
+            li.textContent = `제안 조치: ${p.action || '미지정'} (이유: ${p.reason || '이유 없음'}) - 사람 확인이 필요하며 실행되지 않았습니다`;
+            propUl.appendChild(li);
+          });
+          proposalSection.appendChild(propUl);
+        }
+        container.appendChild(proposalSection);
+
         return container;
       }
 
