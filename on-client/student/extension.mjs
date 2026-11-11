@@ -199,7 +199,7 @@ export function createStudentView() {
       if (mode && modeMap[mode]) {
         const modeBadge = document.createElement('div');
         modeBadge.className = 'status-badge mode-notice';
-        modeBadge.textContent = modeMap[mode];
+        modeBadge.textContent = modeMap[currentMode] || modeMap[mode];
         container.appendChild(modeBadge);
       }
 
@@ -865,14 +865,10 @@ export function createStudentView() {
       return container;
     },
 
-    /**
-     * 18단계: 근거에 연결된 AI 보안 이벤트 설명 완성
-     */
     renderExplanation({ event, explanation, checkedAt }) {
       const container = document.createElement('div');
       container.className = 'student-explanation-container';
 
-      // 1. explanation 오류 처리 (event가 null이어도 오류 메시지와 사유를 먼저 표시)
       if (explanation?.status === 'error') {
         const errEl = document.createElement('div');
         errEl.className = 'explanation-error-block';
@@ -888,12 +884,9 @@ export function createStudentView() {
         codeP.textContent = `오류 코드: ${safeCode}`;
         errEl.appendChild(codeP);
 
-        const rawCodeUpper = String(safeCode).toUpperCase();
-        if (explanation.data?.executed === true || rawCodeUpper.includes('EXECUTED')) {
-          const executedNotice = document.createElement('p');
-          executedNotice.textContent = 'AI가 이미 실행했다고 답한 설명은 쓸 수 없습니다.';
-          errEl.appendChild(executedNotice);
-        }
+        const executedNotice = document.createElement('p');
+        executedNotice.textContent = '실행됐다고 주장한 AI 설명이나 오류 상태의 설명은 쓸 수 없습니다.';
+        errEl.appendChild(executedNotice);
 
         const safeP = document.createElement('p');
         safeP.textContent = '기록은 그대로이며 과제 실패가 아닙니다.';
@@ -903,7 +896,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 2. 오류가 없는데 event가 null인 경우: 기록 선택 안내
       if (!event) {
         const noEventP = document.createElement('p');
         noEventP.className = 'explanation-notice no-event-notice';
@@ -912,7 +904,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 3. 로딩 상태
       if (explanation?.status === 'loading') {
         const loadingP = document.createElement('p');
         loadingP.className = 'explanation-notice loading-notice';
@@ -921,7 +912,6 @@ export function createStudentView() {
         return container;
       }
 
-      // 4. 대기(idle) 상태
       if (!explanation || explanation.status === 'idle') {
         const idleP = document.createElement('p');
         idleP.className = 'explanation-notice idle-notice';
@@ -930,17 +920,14 @@ export function createStudentView() {
         return container;
       }
 
-      // 5. 성공(ok) 상태 검증 및 렌더링
       if (explanation.status === 'ok') {
         const expData = explanation.data || {};
         const eventEvidenceList = Array.isArray(event.evidence) ? event.evidence : [];
         const evidenceIdMap = new Map(eventEvidenceList.map((item) => [item.id, item.text]));
 
-        // 근거 검증: explanation의 evidenceIds가 event.evidence에 빠짐없이 존재하는지 대조
         const citedIds = Array.isArray(expData.evidenceIds) ? expData.evidenceIds : [];
         const hasMissingEvidence = citedIds.some((id) => !evidenceIdMap.has(id));
 
-        // 근거 불일치 또는 위조 ID 발생 시 설명 기각 (data-student-explanation-event 속성 부여 금지)
         if (hasMissingEvidence) {
           const mismatchEl = document.createElement('div');
           mismatchEl.className = 'explanation-mismatch-block';
@@ -961,10 +948,8 @@ export function createStudentView() {
           return container;
         }
 
-        // 검증 통과: 성공 속성 부여
         container.setAttribute('data-student-explanation-event', event.id);
 
-        // 1) 사건 ID 및 참고용 요약
         const headerEl = document.createElement('div');
         headerEl.className = 'explanation-header';
 
@@ -981,7 +966,6 @@ export function createStudentView() {
         headerEl.appendChild(summaryP);
         container.appendChild(headerEl);
 
-        // 2) 인용 근거 (evidenceIds)
         const evidenceSection = document.createElement('div');
         evidenceSection.className = 'explanation-sub-section';
         const evTitle = document.createElement('h5');
@@ -1004,7 +988,6 @@ export function createStudentView() {
         evidenceSection.appendChild(evUl);
         container.appendChild(evidenceSection);
 
-        // 3) 규칙 목록 (event.rules)
         const rulesSection = document.createElement('div');
         rulesSection.className = 'explanation-sub-section';
         const rulesTitle = document.createElement('h5');
@@ -1027,7 +1010,6 @@ export function createStudentView() {
         rulesSection.appendChild(rulesUl);
         container.appendChild(rulesSection);
 
-        // 4) 확인 불가 상태 목록 (access·session·device 중 unknown 분리)
         const stateSection = document.createElement('div');
         stateSection.className = 'explanation-sub-section';
         const stateTitle = document.createElement('h5');
@@ -1054,7 +1036,6 @@ export function createStudentView() {
         stateSection.appendChild(stateUl);
         container.appendChild(stateSection);
 
-        // 5) 제안 (proposals) 처리
         const proposalSection = document.createElement('div');
         proposalSection.className = 'explanation-sub-section';
         const propTitle = document.createElement('h5');
@@ -1089,6 +1070,166 @@ export function createStudentView() {
       return container;
     },
 
-    renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 모드를 연결하세요.'; },
+    /**
+     * 19단계: 보안 조치 요청 상태와 실제 결과 구분
+     */
+    renderAction({ status, event, actionId, target, receipt, observation, message, confirmationExpiresAt, error }) {
+      const container = document.createElement('div');
+      container.className = 'student-action-container';
+
+      // 1. 이벤트가 있을 때만 event.id 속성 바인딩
+      if (event?.id) {
+        container.setAttribute('data-student-action-event', event.id);
+      }
+
+      // 2. 요청 ID가 있을 때만 request 속성 바인딩
+      if (receipt?.requestId) {
+        container.setAttribute('data-student-action-request', receipt.requestId);
+      }
+
+      // 3. 상단 안내: 연동 시스템 지원 조치 유무 안내
+      const supportNotice = document.createElement('p');
+      supportNotice.className = 'action-support-notice';
+      const supportedActions = Array.isArray(event?.supportedActions) ? event.supportedActions : [];
+      if (supportedActions.length === 0) {
+        supportNotice.textContent = '연동 시스템이 지원하는 조치가 없어(supportedActions 빈 배열) 조치 준비 버튼이 나오지 않는 것이 정상입니다.';
+      } else {
+        supportNotice.textContent = '조치 집행 및 재조회는 제공 화면의 버튼을 사용하세요.';
+      }
+      container.appendChild(supportNotice);
+
+      // 4. 상태별 표시 영역
+      const statusSection = document.createElement('section');
+      statusSection.className = 'action-status-section';
+
+      const statusTitle = document.createElement('h4');
+      statusTitle.textContent = `조치 상태: ${status || 'unknown'}`;
+      statusSection.appendChild(statusTitle);
+
+      const statusDesc = document.createElement('p');
+      statusDesc.className = 'action-status-desc';
+
+      if (status === 'idle') {
+        statusDesc.textContent = '아직 미실행';
+      } else if (status === 'loading') {
+        statusDesc.textContent = '조치 준비 또는 결과 조회 중';
+      } else if (status === 'prepared') {
+        statusDesc.textContent = '준비됨·미실행';
+        if (confirmationExpiresAt) {
+          const expireP = document.createElement('p');
+          expireP.className = 'action-expire-time';
+          expireP.textContent = `확인 기한: ${confirmationExpiresAt}`;
+          statusSection.appendChild(expireP);
+        }
+      } else if (status === 'executing') {
+        statusDesc.textContent = '서버에 전달 중(executing). 결과가 아직 없음';
+      } else if (status === 'pending') {
+        statusDesc.textContent = '서버 접수·처리 중(pending). 서버가 받았다는 것(ACK)은 효과가 아님 (완료 아님)';
+      } else if (status === 'succeeded') {
+        if (observation && observation.effectApplied === true) {
+          statusDesc.textContent = '효과 확인(succeeded)';
+
+          const effectUl = document.createElement('ul');
+          effectUl.className = 'action-effect-list';
+
+          const effectLi = document.createElement('li');
+          effectLi.textContent = 'effectApplied: true';
+          effectUl.appendChild(effectLi);
+
+          const timeLi = document.createElement('li');
+          timeLi.textContent = `관측 시각: ${observation.observedAt || '시각 확인 불가'}`;
+          effectUl.appendChild(timeLi);
+
+          if (receipt?.receiptId) {
+            const receiptLi = document.createElement('li');
+            receiptLi.textContent = `접수 번호(receiptId): ${receipt.receiptId}`;
+            effectUl.appendChild(receiptLi);
+          }
+
+          statusSection.appendChild(effectUl);
+        } else {
+          statusDesc.textContent = '결과 불명(unknown) - 효과가 관측되지 않았으므로 성공으로 단정하지 않고 결과를 재조회해야 합니다.';
+        }
+      } else if (status === 'denied') {
+        statusDesc.textContent = `거절(denied): ${message || '거절 이유 없음'}`;
+      } else if (status === 'failed') {
+        statusDesc.textContent = `실패(failed): ${message || '실패 사유 없음'}`;
+      } else if (status === 'unknown') {
+        statusDesc.textContent = '결과 불명(unknown) - 효과 없음으로도 성공으로도 판단하지 말고 연동 시스템 결과만 재조회하세요.';
+      } else if (status === 'expired') {
+        statusDesc.textContent = '확인 기한 지남(expired) - 다시 준비하세요.';
+      } else if (status === 'error') {
+        const safeCode = error?.code || 'ERROR';
+        const safeMsg = error?.message || '요청 처리 안 됨';
+        statusDesc.textContent = `요청 처리 안 됨: [${safeCode}] ${safeMsg}`;
+      } else {
+        statusDesc.textContent = `알 수 없는 상태(${status}) - 연동 시스템 결과만 재조회하세요.`;
+      }
+
+      statusSection.appendChild(statusDesc);
+      container.appendChild(statusSection);
+
+      // 5. 사건 식별자 및 세부 정보 (받은 범위에서만 표시)
+      const detailsSection = document.createElement('section');
+      detailsSection.className = 'action-details-section';
+
+      const detailsTitle = document.createElement('h5');
+      detailsTitle.textContent = '조치 관련 정보';
+      detailsSection.appendChild(detailsTitle);
+
+      const detailsUl = document.createElement('ul');
+      detailsUl.className = 'action-details-list';
+
+      if (event?.id) {
+        const li = document.createElement('li');
+        li.textContent = `사건 ID: ${event.id}`;
+        detailsUl.appendChild(li);
+      }
+
+      if (Array.isArray(event?.evidence) && event.evidence.length > 0) {
+        const evidenceIds = event.evidence.map((ev) => ev.id).filter(Boolean).join(', ');
+        if (evidenceIds) {
+          const li = document.createElement('li');
+          li.textContent = `근거 ID: ${evidenceIds}`;
+          detailsUl.appendChild(li);
+        }
+      }
+
+      if (actionId) {
+        const li = document.createElement('li');
+        li.textContent = `조치 ID(actionId): ${actionId}`;
+        detailsUl.appendChild(li);
+      }
+
+      if (target?.id) {
+        const li = document.createElement('li');
+        const genText = target.generation !== undefined ? ` (generation: ${target.generation})` : '';
+        li.textContent = `실제 대상 ID: ${target.id}${genText}`;
+        detailsUl.appendChild(li);
+      }
+
+      if (receipt?.requestId) {
+        const li = document.createElement('li');
+        li.textContent = `요청 번호(requestId): ${receipt.requestId}`;
+        detailsUl.appendChild(li);
+      }
+
+      if (receipt?.receiptId) {
+        const li = document.createElement('li');
+        li.textContent = `접수 번호(receiptId): ${receipt.receiptId}`;
+        detailsUl.appendChild(li);
+      }
+
+      if (receipt?.version !== undefined) {
+        const li = document.createElement('li');
+        li.textContent = `버전(version): ${receipt.version}`;
+        detailsUl.appendChild(li);
+      }
+
+      detailsSection.appendChild(detailsUl);
+      container.appendChild(detailsSection);
+
+      return container;
+    },
   };
 }
